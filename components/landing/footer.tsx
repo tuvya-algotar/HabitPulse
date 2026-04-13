@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { Bell, Twitter, Github, Linkedin, DiscIcon as Discord } from "lucide-react"
+import { Bell, Github, Linkedin } from "lucide-react"
 import { motion } from "framer-motion"
 
 const footerLinks = {
@@ -44,15 +44,22 @@ export function Footer() {
               A smarter way to build better routines and remember what matters. No login required.
             </p>
             <div className="flex items-center gap-4 mt-2">
-              {[Twitter, Github, Linkedin, Discord].map((Icon, i) => (
-                <Link
-                  key={i}
-                  href="#"
-                  className="text-neutral-600 transition-colors hover:text-white"
-                >
-                  <Icon className="h-5 w-5" />
-                </Link>
-              ))}
+              <Link
+                href="https://github.com/tuvya-algotar"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-neutral-600 transition-colors hover:text-white"
+              >
+                <Github className="h-5 w-5" />
+              </Link>
+              <Link
+                href="https://www.linkedin.com/in/tuvya-algotar-8b4b07374/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-neutral-600 transition-colors hover:text-white"
+              >
+                <Linkedin className="h-5 w-5" />
+              </Link>
             </div>
           </div>
 
