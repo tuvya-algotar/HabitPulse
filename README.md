@@ -8,6 +8,10 @@ It is designed to eliminate friction, reduce overwhelm, and help users **take ac
 
 ---
 
+<img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/59d09f52-8ae1-46c1-9558-6f687c73f76a" />
+
+---
+
 ![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![PWA](https://img.shields.io/badge/PWA-Ready-orange.svg)
