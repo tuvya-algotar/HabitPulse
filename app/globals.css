@@ -43,7 +43,17 @@
   --warning-foreground: #0a0a0a;
   --glow: rgba(16, 185, 129, 0.1);
   --glow-strong: rgba(16, 185, 129, 0.2);
+
+  /* HabitPulse Theme System */
+  --theme-bg-base: #050505;
+  --theme-bg-card: #0a0a0c;
+  --theme-bg-card-hover: rgba(255, 255, 255, 0.04);
+  --theme-border: rgba(255, 255, 255, 0.05);
+  --theme-border-strong: rgba(255, 255, 255, 0.1);
+  --theme-text-primary: #ffffff;
+  --theme-text-muted: #737373;
 }
+
 
 html.dark {
   --background: #030712;
@@ -127,10 +137,18 @@ html.dark {
   --color-sidebar-ring: var(--sidebar-ring);
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
-  --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
   --color-glow: var(--glow);
   --color-glow-strong: var(--glow-strong);
+
+  /* HabitPulse Mapping */
+  --color-theme-base: var(--theme-bg-base);
+  --color-theme-card: var(--theme-bg-card);
+  --color-theme-card-hover: var(--theme-bg-card-hover);
+  --color-theme-border: var(--theme-border);
+  --color-theme-border-strong: var(--theme-border-strong);
+  --color-theme-text: var(--theme-text-primary);
+  --color-theme-text-muted: var(--theme-text-muted);
 }
 
 @layer base {

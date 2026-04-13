@@ -4,6 +4,7 @@ import { Analytics } from '@vercel/analytics/next'
 import { ThemeProvider } from 'next-themes'
 import { Toaster } from 'sonner'
 import { GlobalPolish } from '@/components/global-polish'
+import { PWARegistry } from '@/components/pwa-registry'
 import './globals.css'
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" })
@@ -21,6 +22,7 @@ export const metadata: Metadata = {
     ],
     apple: '/apple-icon.png',
   },
+  manifest: '/manifest.json',
 }
 
 export const viewport: Viewport = {
@@ -46,6 +48,7 @@ export default function RootLayout({
           disableTransitionOnChange={false}
         >
           <GlobalPolish />
+          <PWARegistry />
           {children}
           <Toaster
             position="top-center"

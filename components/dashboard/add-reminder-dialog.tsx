@@ -29,7 +29,17 @@ import { TimePicker, DurationStepper } from "@/components/dashboard/scheduler-co
 const presetIcons = [Pill, Droplets, Key, Pill, Droplets, Dumbbell]
 
 interface AddReminderDialogProps {
-  onAdd: (reminder: { name: string; time: string; category: ReminderCategory; duration: number }) => void
+  onAdd: (reminder: { 
+    name: string; 
+    time: string; 
+    category: ReminderCategory; 
+    duration: number;
+    type?: "binary" | "count" | "timer";
+    targetValue?: number;
+    currentValue?: number;
+    targetDuration?: number;
+    currentDuration?: number;
+  }) => void
 }
 
 export function AddReminderDialog({ onAdd }: AddReminderDialogProps) {
@@ -38,22 +48,41 @@ export function AddReminderDialog({ onAdd }: AddReminderDialogProps) {
   const [time, setTime] = useState("09:00")
   const [category, setCategory] = useState<ReminderCategory>("routine")
   const [duration, setDuration] = useState(7)
+  
+  const [type, setType] = useState<"binary" | "count" | "timer">("binary")
+  const [targetValue, setTargetValue] = useState(5)
+  const [targetDuration, setTargetDuration] = useState(15)
+  
   const [showPresets, setShowPresets] = useState(true)
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!name.trim()) return
-    onAdd({ name: name.trim(), time, category, duration })
+    
+    // Construct reminder base
+    const reminderData: any = { name: name.trim(), time, category, duration, type }
+    if (type === "count") {
+      reminderData.targetValue = targetValue
+      reminderData.currentValue = 0
+    } else if (type === "timer") {
+      reminderData.targetDuration = targetDuration
+      reminderData.currentDuration = 0
+    }
+
+    onAdd(reminderData)
     setName("")
     setTime("09:00")
     setCategory("routine")
     setDuration(7)
+    setType("binary")
+    setTargetValue(5)
+    setTargetDuration(15)
     setShowPresets(true)
     setOpen(false)
   }
 
   function handlePreset(preset: (typeof PRESET_REMINDERS)[number]) {
-    onAdd({ name: preset.name, time: preset.time, category: preset.category, duration: preset.duration })
+    onAdd({ name: preset.name, time: preset.time, category: preset.category, duration: preset.duration, type: "binary" })
     setOpen(false)
     setShowPresets(true)
   }
@@ -70,7 +99,7 @@ export function AddReminderDialog({ onAdd }: AddReminderDialogProps) {
           Add Reminder
         </motion.button>
       </DialogTrigger>
-      <DialogContent className="border-white/10 bg-[#0a0a0c] sm:max-w-md shadow-2xl p-6 rounded-2xl text-white">
+      <DialogContent className="border-white/10 bg-[#0a0a0c] sm:max-w-md shadow-2xl p-6 rounded-2xl text-white max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-white">Add a Reminder</DialogTitle>
           <DialogDescription className="text-neutral-400">
@@ -124,7 +153,7 @@ export function AddReminderDialog({ onAdd }: AddReminderDialogProps) {
               <div className="relative my-4">
                 <div className="absolute inset-0 flex items-center">
                   <div className="w-full border-t border-white/10" />
-                </div>
+               </div>
                 <div className="relative flex justify-center text-xs uppercase tracking-widest font-mono">
                   <span className="bg-[#0a0a0c] px-3 text-neutral-600">or</span>
                 </div>
@@ -160,6 +189,51 @@ export function AddReminderDialog({ onAdd }: AddReminderDialogProps) {
                 />
               </div>
 
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="type" className="text-sm font-medium text-white/80">Tracking Type</Label>
+                <Select
+                  value={type}
+                  onValueChange={(v) => setType(v as "binary" | "count" | "timer")}
+                >
+                  <SelectTrigger className="w-full rounded-xl border-white/10 bg-black text-white h-11 focus:ring-1 focus:ring-white/30">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="border-white/10 bg-[#0d0d10] text-white">
+                    <SelectItem value="binary" className="focus:bg-white/10 focus:text-white">Simple Check-off</SelectItem>
+                    <SelectItem value="count" className="focus:bg-white/10 focus:text-white">Count / Amount</SelectItem>
+                    <SelectItem value="timer" className="focus:bg-white/10 focus:text-white">Timer / Duration</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {type === "count" && (
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="targetValue" className="text-sm font-medium text-white/80">Target Amount</Label>
+                  <Input
+                    id="targetValue"
+                    type="number"
+                    min="1"
+                    value={targetValue}
+                    onChange={(e) => setTargetValue(parseInt(e.target.value) || 1)}
+                    className="rounded-xl border-white/10 bg-black text-white focus-visible:ring-1 focus-visible:ring-white/30 h-11"
+                  />
+                </div>
+              )}
+
+              {type === "timer" && (
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="targetDuration" className="text-sm font-medium text-white/80">Target Duration (minutes)</Label>
+                  <Input
+                    id="targetDuration"
+                    type="number"
+                    min="1"
+                    value={targetDuration}
+                    onChange={(e) => setTargetDuration(parseInt(e.target.value) || 1)}
+                    className="rounded-xl border-white/10 bg-black text-white focus-visible:ring-1 focus-visible:ring-white/30 h-11"
+                  />
+                </div>
+              )}
+
               <div className="flex gap-4">
                 <div className="flex flex-1 flex-col gap-2">
                   <Label className="text-sm font-medium text-white/80">Reminder Time</Label>
@@ -190,7 +264,7 @@ export function AddReminderDialog({ onAdd }: AddReminderDialogProps) {
               </div>
 
               <div className="flex flex-col gap-2 mt-1">
-                <Label className="text-sm font-medium text-white/80">Duration</Label>
+                <Label className="text-sm font-medium text-white/80">Duration (Days)</Label>
                 <DurationStepper value={duration} onChange={setDuration} />
               </div>
 

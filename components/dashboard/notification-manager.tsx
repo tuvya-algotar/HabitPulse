@@ -1,10 +1,12 @@
 "use client"
 
 import { useEffect, useRef, useCallback, useState } from "react"
-import { snoozeReminder, getReminders, CATEGORY_CONFIG, markNotified } from "@/lib/reminders"
+
+import { snoozeReminder, getReminders, CATEGORY_CONFIG, markNotified, getLocalDateStr } from "@/lib/reminders"
 import type { Reminder, ReminderCategory } from "@/lib/reminders"
 import { BellRing, X, Clock, CheckCircle, AlarmClock } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
+import { toast } from "sonner"
 
 interface NotificationManagerProps {
   reminders: Reminder[]
@@ -40,7 +42,8 @@ export function NotificationManager({
     if (typeof window === "undefined" || !("Notification" in window)) return
     const perm = Notification.permission
     setPermissionState(perm)
-    if (perm === "default") {
+    // Only show banner if permission is default or denied
+    if (perm === "default" || perm === "denied") {
       setShowBanner(true)
     }
   }, [])
@@ -89,12 +92,17 @@ export function NotificationManager({
         setActiveNotifications((prev) => prev.filter((n) => n.id !== notifId))
       }, 30000)
 
+      // Show in-app sonner toast
+      toast.info(reminder.name, {
+        description: "Time to complete your habit",
+      })
+
       // Browser notification
       if (permissionState === "granted") {
         try {
           const emoji = CATEGORY_EMOJI[reminder.category] || "🔔"
           new Notification(`${emoji} ${reminder.name}`, {
-            body: `Scheduled at ${reminder.time} · ${CATEGORY_CONFIG[reminder.category].label}`,
+            body: "Time to complete your habit",
             tag: reminder.id,
             icon: "/favicon.ico",
           })
@@ -109,10 +117,13 @@ export function NotificationManager({
   useEffect(() => {
     const checkReminders = () => {
       const now = new Date()
-      const today = now.toISOString().split("T")[0]
-      const currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(
-        now.getMinutes()
-      ).padStart(2, "0")}`
+      const today = getLocalDateStr(now)
+      
+      let lastCheckedTime = now.getTime() - 60000
+      try {
+        const lastCheckedStr = localStorage.getItem("lastCheckedTime")
+        if (lastCheckedStr) lastCheckedTime = parseInt(lastCheckedStr, 10)
+      } catch {}
 
       const currentReminders = getReminders()
 
@@ -133,17 +144,35 @@ export function NotificationManager({
           return
         }
 
-        // Normal time-based check
-        if (reminder.time === currentTime && reminder.lastNotifiedDate !== today) {
+        // Normal time-based check with 1-minute window
+        const [h, m] = reminder.time.split(":").map(Number)
+        const scheduledTime = new Date(now)
+        scheduledTime.setHours(h, m, 0, 0)
+        
+        const diffInSeconds = (now.getTime() - scheduledTime.getTime()) / 1000
+        
+        // Detect if missed during inactive period
+        const missedInactive = scheduledTime.getTime() > lastCheckedTime && scheduledTime.getTime() <= now.getTime()
+
+        if (
+          ((diffInSeconds >= 0 && diffInSeconds <= 60) || missedInactive) && 
+          reminder.lastNotifiedDate !== today
+        ) {
+          // Immediately block repeated triggers
+          reminder.lastNotifiedDate = today
           markNotified(reminder.id)
           triggerNotification(reminder)
         }
       })
+      
+      try {
+        localStorage.setItem("lastCheckedTime", now.getTime().toString())
+      } catch {}
     }
 
-    // Run initially, then set interval to trigger every 60 seconds (1 minute)
+    // Run initially, then set interval to trigger every 30 seconds
     checkReminders()
-    const interval = setInterval(checkReminders, 60000)
+    const interval = setInterval(checkReminders, 30000)
 
     return () => clearInterval(interval)
   }, [reminders, triggerNotification])
@@ -152,7 +181,7 @@ export function NotificationManager({
     <>
       {/* Permission Banner */}
       <AnimatePresence>
-        {showBanner && permissionState === "default" && (
+        {showBanner && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
@@ -166,18 +195,23 @@ export function NotificationManager({
                   <BellRing className="h-4 w-4 text-white" />
                 </div>
                 <p className="text-sm font-medium text-white/90">
-                  Enable browser notifications to get reminded even when this tab is in the background.
+                  {permissionState === "default" 
+                    ? "Enable notifications to get habit reminders."
+                    : "Notifications are blocked. Enable from browser settings."
+                  }
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={requestPermission}
-                  className="shrink-0 rounded-lg bg-white px-4 py-1.5 text-xs font-semibold text-black transition-all hover:bg-neutral-200"
-                >
-                  Enable
-                </motion.button>
+                {permissionState === "default" && (
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={requestPermission}
+                    className="shrink-0 rounded-lg bg-white px-4 py-1.5 text-xs font-semibold text-black transition-all hover:bg-neutral-200"
+                  >
+                    Enable
+                  </motion.button>
+                )}
                 <button
                   onClick={() => setShowBanner(false)}
                   className="rounded-lg p-1.5 text-white/50 transition-colors hover:text-white"

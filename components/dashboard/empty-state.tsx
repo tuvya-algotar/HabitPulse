@@ -14,14 +14,13 @@ export function EmptyState() {
       <motion.div
         animate={{ y: [0, -8, 0] }}
         transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-        className="flex h-20 w-20 items-center justify-center rounded-2xl border border-white/5 bg-white/[0.02]"
+        className="flex h-20 w-20 items-center justify-center rounded-2xl border border-theme-border bg-theme-card"
       >
-        <ClipboardList className="h-10 w-10 text-neutral-600" />
+        <ClipboardList className="h-10 w-10 text-theme-text-muted" />
       </motion.div>
-      <h3 className="text-lg font-semibold text-white">No reminders yet</h3>
-      <p className="max-w-sm text-sm leading-relaxed text-neutral-500">
-        Add your first reminder using the button above. Choose from
-        preset templates or create a custom one.
+      <h3 className="text-lg font-semibold text-theme-text">Start by adding your first habit</h3>
+      <p className="max-w-sm text-sm leading-relaxed text-theme-text-muted">
+        Choose from preset templates or create a custom task.
       </p>
     </motion.div>
   )
