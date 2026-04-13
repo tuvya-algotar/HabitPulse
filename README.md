@@ -1,116 +1,96 @@
-# HabitPulse
+# HabitPulse — Local-First Habit Execution System
 
-[![Next.js](https://img.shields.io/badge/Next.js-15-black?style=for-the-badge&logo=next.js)](https://nextjs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?style=for-the-badge&logo=typescript)](https://www.typescriptlang.org/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.4-38B2AC?style=for-the-badge&logo=tailwind-css)](https://tailwindcss.com/)
-[![Framer Motion](https://img.shields.io/badge/Framer_Motion-11-FF0055?style=for-the-badge&logo=framer)](https://www.framer.com/motion/)
+HabitPulse is a high-performance, local-first habit execution platform built as a Progressive Web App (PWA). It is designed to bridge the gap between "tracking" and "execution" by eliminating the friction, clutter, and guilt often associated with traditional habit applications.
 
-**HabitPulse** is a high-performance, local-first habit management system designed for the modern user. Built with a focus on visual excellence and zero-friction interaction, it helps users build lasting routines through smart reminders and intuitive progress tracking.
+![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
+![PWA](https://img.shields.io/badge/PWA-Ready-orange.svg)
+![Privacy](https://img.shields.io/badge/Privacy-Local--First-9cf.svg)
 
----
+## 🎯 The Philosophy
 
-## 💎 The Vision (Why it exists)
+Most habit trackers fail because they prioritize data entry over human behavior. They become overwhelming checklists that punish users for missing a single day. 
 
-In an era of notification fatigue and complex "all-in-one" productivity suites, **HabitPulse** takes a different approach. We believe that habit formation should be **invisible yet present**. 
-
-Most habit trackers fail because of high entry barriers: forced sign-ups, complex configurations, and cluttered UIs. HabitPulse exists to solve the "forgetting curve" of daily routines—medication, hydration, and essentials—using Human-Centered Design (HCD) principles to create a system that feels like an extension of the user's brain, not another chore.
-
----
-
-## ⚡ Key Features
-
-- **Premium Noir Aesthetic**: A meticulously crafted midnight-black UI with high-contrast minimalist accents, designed to reduce eye strain and focus the user.
-- **Micro-Interaction Storytelling**: Every completion, delete, or snooze action is accompanied by fluid, Apple-level animations via Framer Motion.
-- **Local-First Privacy**: Zero data leaves your device. We use browser-native storage to ensure your habits stay private and accessible even without a backend.
-- **Smart Category Engine**: Context-aware categories for Health, Hydration, Morning/Evening Routines, and physical Item checks.
-- **Dynamic Progress Visualization**: Real-time SVG-based progress rings that update instantly as you complete your day.
+**HabitPulse** is built on four core principles:
+1. **Action over Tracking**: Focus exclusively on what needs to be done *right now*.
+2. **Guidance over Overload**: Reduce cognitive load by hiding irrelevant data until it matters.
+3. **Recovery over Guilt**: Provide frictionless "catch-up" mechanics instead of failure indicators.
+4. **Privacy by Default**: Your behavior data is yours alone. It never leaves your device.
 
 ---
 
-## 🏗️ System Architecture
+## 🔥 Key Features
 
-HabitPulse follows a modern, decoupled React architecture optimized for speed and maintainability.
+### 1. Today Focus System
+The dashboard intelligently filters your habits to show only the 3–5 most relevant tasks. By dynamically adjusting based on the current time and completion status, it ensures you always know your next move without scanning a long list.
 
-### High-Level Flow
-1. **Interaction Layer**: React components triggered by user actions (Add/Complete/Edit).
-2. **State Management**: Centralized custom hooks and local storage synchronization patterns.
-3. **Notification Engine**: Service-layer implementation of the Web Notification API for system-level pings.
-4. **Persistence Layer**: Abstracted `localStorage` wrapper for non-blocking data operations.
+### 2. Missed Habits Recovery UX
+Life happens. When habits are overdue, HabitPulse detects them and moves them into a specialized "Recovery" section. Instead of red "failed" marks, users are given gentle options to **Complete Now** or **Snooze**, allowing the routine to stay alive without the psychological weight of failure.
 
-### Directory Structure
-```text
-├── app/                  # Next.js App Router (Pages & Layouts)
-├── components/           
-│   ├── dashboard/       # Feature-specific dashboard logic
-│   ├── landing/         # Marketing & Hero components
-│   └── ui/              # Atomized base components (Radix/Shadcn)
-├── hooks/                # Custom hooks for state and lifecycle
-├── lib/                  # Utility functions and storage logic
-└── public/               # Static assets and icons
-```
+### 3. Intelligent Streak Engine
+Unlike simple counters, our streak system understands context. It iterates backwards through history and protects your momentum by "pausing" the streak for the current day until it's finished, rather than breaking it prematurely.
 
----
+### 4. Behavior-Driven Insight Engine
+A priority-based heuristic engine analyzes your weekly performance. It detects patterns like "Morning Prime Time" or "High Friction Tasks" and provides non-repetitive, actionable feedback to help you refine your routines.
 
-## 🛠️ Technology Stack
+### 5. Robust Notification System
+Built for the realities of mobile browsers, the reminder engine uses a 30-second heartbeat with a 60-second execution window. It handles missed recovery, ensuring that if you open the app after a scheduled time, you are still notified of what you missed.
 
-| Category | Technology |
-| :--- | :--- |
-| **Framework** | Next.js 15 (App Router) |
-| **Language** | TypeScript (Strict Mode) |
-| **Styling** | Tailwind CSS (Utility-first) |
-| **Animations** | Framer Motion (Orchestration & Micro-interactions) |
-| **Icons** | Lucide React |
-| **Components** | Radix UI / Shadcn UI |
+### 6. Local-First Architecture
+- **No Backend**: All data persists in `localStorage` with safe `try/catch` wrappers.
+- **Offline Ready**: Full service worker support allows the app to function perfectly without an internet connection.
+- **Backup & Portability**: Integrated JSON export/import system ensures you can move your data between devices without a central server.
 
 ---
 
-## 🚀 Getting Started
+## 🏗️ Technical Architecture
 
-### Prerequisites
-- Node.js 18.x or higher
-- npm or pnpm
+HabitPulse is engineered for stability and speed.
 
-### Installation
+- **Data Model**: Uses an immutable history-based model. Every habit stores a log of completion dates rather than a simple boolean. 
+- **Derived Metrics**: All UI states (streaks, percentages, insights) are computed on-the-fly from the history array. This eliminates "state desync" bugs where cached values don't match actual data.
+- **Performance**: Leverages `Framer Motion` for layout transitions and `Memoization` to ensure the heartbeat loop doesn't impact UI responsiveness.
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/tuvya-algotar/HabitPulse.git
-   cd HabitPulse
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Launch Project**
-   ```bash
-   npm run dev
-   ```
-
-Navigate to `http://localhost:3000` to experience the pulse of your habits.
+**Stack:**
+- **Framework**: Next.js 14 (App Router)
+- **Language**: TypeScript
+- **Styling**: Tailwind CSS (Noir Theme)
+- **Animations**: Framer Motion
+- **Persistence**: LocalStorage API
 
 ---
 
-## 🛡️ Privacy & Security
+## 🚀 The User Flow
 
-HabitPulse is a **Local-First** application. 
-- **No Cookies**: We don't track you across sessions.
-- **No Database**: Your data is stored in your browser's `localStorage`.
-- **No Analytics**: We respect your digital footprint.
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Whether it's a bug fix, feature request, or design improvement, feel free to open an issue or submit a pull request.
+1. **Add**: Define a habit with a specific time and tracking type (Binary, Count, or Timer).
+2. **Execute**: See your next 3 priorities in the "Today Focus" section.
+3. **Recover**: If life gets busy, use the "You missed earlier" section to catch up or snooze tasks.
+4. **Refine**: Check the Insight Engine to see which habits are locking in and which ones need timing adjustments.
+5. **Persist**: Build unbreakable streaks and visualize your last 7 days of activity on every card.
 
 ---
 
-## 📄 License
+## 📱 Installation (PWA)
 
-Distributed under the MIT License. See `LICENSE` for more information.
+HabitPulse is fully installable and feels like a native app.
+
+**iPhone (Safari):**
+1. Open the app URL in Safari.
+2. Tap the **Share** button.
+3. Scroll down and select **Add to Home Screen**.
+
+**Android (Chrome):**
+1. Open the app URL in Chrome.
+2. Tap the **three dots** in the top right.
+3. Select **Install App** or **Add to Home Screen**.
 
 ---
 
-Created by **Tuvya Algotar** — Focused on building tools that simplify life.
+## 🧪 Future Roadmap
+- [ ] Secure Multi-device Sync (P2P/Encrypted)
+- [ ] Advanced Category Analytics
+- [ ] Custom Soundscapes for Habit Timers
+
+---
+
+*Built with focus and precision for those who care about their time.*
