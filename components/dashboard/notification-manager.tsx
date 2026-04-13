@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useCallback, useState } from "react"
-import { snoozeReminder, getReminders, CATEGORY_CONFIG } from "@/lib/reminders"
+import { snoozeReminder, getReminders, CATEGORY_CONFIG, markNotified } from "@/lib/reminders"
 import type { Reminder, ReminderCategory } from "@/lib/reminders"
 import { BellRing, X, Clock, CheckCircle, AlarmClock } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
@@ -107,8 +107,9 @@ export function NotificationManager({
   )
 
   useEffect(() => {
-    const interval = setInterval(() => {
+    const checkReminders = () => {
       const now = new Date()
+      const today = now.toISOString().split("T")[0]
       const currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(
         now.getMinutes()
       ).padStart(2, "0")}`
@@ -118,7 +119,7 @@ export function NotificationManager({
       currentReminders.forEach((reminder) => {
         if (reminder.completed) return
 
-        // Check snoozed reminders — fire when snooze expires
+        // Check snoozed reminders
         if (reminder.snoozedUntil) {
           const snoozedUntil = new Date(reminder.snoozedUntil)
           if (now < snoozedUntil) return // still snoozing
@@ -133,15 +134,16 @@ export function NotificationManager({
         }
 
         // Normal time-based check
-        if (reminder.time === currentTime) {
-          const notifKey = `${reminder.id}-${currentTime}`
-          if (!notifiedRef.current.has(notifKey)) {
-            notifiedRef.current.add(notifKey)
-            triggerNotification(reminder)
-          }
+        if (reminder.time === currentTime && reminder.lastNotifiedDate !== today) {
+          markNotified(reminder.id)
+          triggerNotification(reminder)
         }
       })
-    }, 5000) // Check every 5 seconds for more responsive snooze
+    }
+
+    // Run initially, then set interval to trigger every 60 seconds (1 minute)
+    checkReminders()
+    const interval = setInterval(checkReminders, 60000)
 
     return () => clearInterval(interval)
   }, [reminders, triggerNotification])

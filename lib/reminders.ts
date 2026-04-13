@@ -9,6 +9,7 @@ export interface Reminder {
   snoozedUntil?: string // ISO string
   createdAt: string // ISO string
   duration: number // Number of days
+  lastNotifiedDate?: string | null // YYYY-MM-DD
 }
 
 const STORAGE_KEY = "smart-habit-reminders"
@@ -90,6 +91,16 @@ export function editReminder(id: string, updates: Partial<Reminder>): Reminder[]
   const reminders = getReminders()
   const updated = reminders.map((r) =>
     r.id === id ? { ...r, ...updates } : r
+  )
+  saveReminders(updated)
+  return updated
+}
+
+export function markNotified(id: string): Reminder[] {
+  const reminders = getReminders()
+  const today = new Date().toISOString().split("T")[0]
+  const updated = reminders.map((r) =>
+    r.id === id ? { ...r, lastNotifiedDate: today } : r
   )
   saveReminders(updated)
   return updated
