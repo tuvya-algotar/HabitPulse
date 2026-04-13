@@ -24,11 +24,12 @@ import {
 import { CATEGORY_CONFIG, PRESET_REMINDERS } from "@/lib/reminders"
 import type { ReminderCategory } from "@/lib/reminders"
 import { motion, AnimatePresence } from "framer-motion"
+import { TimePicker, DurationStepper } from "@/components/dashboard/scheduler-components"
 
 const presetIcons = [Pill, Droplets, Key, Pill, Droplets, Dumbbell]
 
 interface AddReminderDialogProps {
-  onAdd: (reminder: { name: string; time: string; category: ReminderCategory }) => void
+  onAdd: (reminder: { name: string; time: string; category: ReminderCategory; duration: number }) => void
 }
 
 export function AddReminderDialog({ onAdd }: AddReminderDialogProps) {
@@ -36,21 +37,23 @@ export function AddReminderDialog({ onAdd }: AddReminderDialogProps) {
   const [name, setName] = useState("")
   const [time, setTime] = useState("09:00")
   const [category, setCategory] = useState<ReminderCategory>("routine")
+  const [duration, setDuration] = useState(7)
   const [showPresets, setShowPresets] = useState(true)
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!name.trim()) return
-    onAdd({ name: name.trim(), time, category })
+    onAdd({ name: name.trim(), time, category, duration })
     setName("")
     setTime("09:00")
     setCategory("routine")
+    setDuration(7)
     setShowPresets(true)
     setOpen(false)
   }
 
   function handlePreset(preset: (typeof PRESET_REMINDERS)[number]) {
-    onAdd({ name: preset.name, time: preset.time, category: preset.category })
+    onAdd({ name: preset.name, time: preset.time, category: preset.category, duration: preset.duration })
     setOpen(false)
     setShowPresets(true)
   }
@@ -159,15 +162,8 @@ export function AddReminderDialog({ onAdd }: AddReminderDialogProps) {
 
               <div className="flex gap-4">
                 <div className="flex flex-1 flex-col gap-2">
-                  <Label htmlFor="time" className="text-sm font-medium text-white/80">Reminder Time</Label>
-                  <Input
-                    id="time"
-                    type="time"
-                    value={time}
-                    onChange={(e) => setTime(e.target.value)}
-                    required
-                    className="rounded-xl border-white/10 bg-black text-white focus-visible:ring-1 focus-visible:ring-white/30 h-11 leading-tight"
-                  />
+                  <Label className="text-sm font-medium text-white/80">Reminder Time</Label>
+                  <TimePicker value={time} onChange={setTime} />
                 </div>
 
                 <div className="flex flex-1 flex-col gap-2">
@@ -191,6 +187,11 @@ export function AddReminderDialog({ onAdd }: AddReminderDialogProps) {
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+
+              <div className="flex flex-col gap-2 mt-1">
+                <Label className="text-sm font-medium text-white/80">Duration</Label>
+                <DurationStepper value={duration} onChange={setDuration} />
               </div>
 
               <DialogFooter className="mt-6 flex gap-2">

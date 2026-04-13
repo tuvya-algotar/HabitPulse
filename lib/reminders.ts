@@ -8,6 +8,7 @@ export interface Reminder {
   completed: boolean
   snoozedUntil?: string // ISO string
   createdAt: string // ISO string
+  duration: number // Number of days
 }
 
 const STORAGE_KEY = "smart-habit-reminders"
@@ -105,11 +106,11 @@ export const CATEGORY_CONFIG: Record<
   custom: { label: "Custom", color: "text-slate-400", bgColor: "bg-slate-500/10", dotColor: "bg-slate-500" },
 }
 
-export const PRESET_REMINDERS: { name: string; category: ReminderCategory; time: string }[] = [
-  { name: "Take morning medicine", category: "health", time: "08:00" },
-  { name: "Drink water", category: "hydration", time: "09:00" },
-  { name: "Check keys and wallet", category: "items", time: "07:30" },
-  { name: "Take evening medicine", category: "health", time: "20:00" },
-  { name: "Drink water (afternoon)", category: "hydration", time: "14:00" },
-  { name: "Exercise", category: "routine", time: "07:00" },
+export const PRESET_REMINDERS: { name: string; category: ReminderCategory; time: string; duration: number }[] = [
+  { name: "Take morning medicine", category: "health", time: "08:00", duration: 7 },
+  { name: "Drink water", category: "hydration", time: "09:00", duration: 7 },
+  { name: "Check keys and wallet", category: "items", time: "07:30", duration: 7 },
+  { name: "Take evening medicine", category: "health", time: "20:00", duration: 7 },
+  { name: "Drink water (afternoon)", category: "hydration", time: "14:00", duration: 7 },
+  { name: "Exercise", category: "routine", time: "07:00", duration: 7 },
 ]

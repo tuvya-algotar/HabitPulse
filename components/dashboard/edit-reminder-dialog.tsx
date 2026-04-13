@@ -24,6 +24,7 @@ import {
 import { CATEGORY_CONFIG } from "@/lib/reminders"
 import type { Reminder, ReminderCategory } from "@/lib/reminders"
 import { motion } from "framer-motion"
+import { TimePicker, DurationStepper } from "@/components/dashboard/scheduler-components"
 
 interface EditReminderDialogProps {
   reminder: Reminder
@@ -35,11 +36,12 @@ export function EditReminderDialog({ reminder, onEdit }: EditReminderDialogProps
   const [name, setName] = useState(reminder.name)
   const [time, setTime] = useState(reminder.time)
   const [category, setCategory] = useState<ReminderCategory>(reminder.category)
+  const [duration, setDuration] = useState(reminder.duration || 7)
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!name.trim()) return
-    onEdit(reminder.id, { name: name.trim(), time, category })
+    onEdit(reminder.id, { name: name.trim(), time, category, duration })
     setOpen(false)
   }
 
@@ -77,15 +79,8 @@ export function EditReminderDialog({ reminder, onEdit }: EditReminderDialogProps
 
           <div className="flex gap-4">
             <div className="flex flex-1 flex-col gap-2">
-              <Label htmlFor="edit-time" className="text-sm font-medium text-white/80">Reminder Time</Label>
-              <Input
-                id="edit-time"
-                type="time"
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-                required
-                className="rounded-xl border-white/10 bg-black text-white focus-visible:ring-1 focus-visible:ring-white/30 h-11 leading-tight"
-              />
+              <Label className="text-sm font-medium text-white/80">Reminder Time</Label>
+              <TimePicker value={time} onChange={setTime} />
             </div>
 
             <div className="flex flex-1 flex-col gap-2">
@@ -109,6 +104,11 @@ export function EditReminderDialog({ reminder, onEdit }: EditReminderDialogProps
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          <div className="flex flex-col gap-2 mt-1">
+            <Label className="text-sm font-medium text-white/80">Duration</Label>
+            <DurationStepper value={duration} onChange={setDuration} />
           </div>
 
           <DialogFooter className="mt-6 flex gap-2">

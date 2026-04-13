@@ -29,7 +29,7 @@ export function DashboardContent() {
   }, [])
 
   const handleAdd = useCallback(
-    (data: { name: string; time: string; category: ReminderCategory }) => {
+    (data: { name: string; time: string; category: ReminderCategory; duration: number }) => {
       const newReminder = addReminder(data)
       setReminders((prev) => [...prev, newReminder])
       toast.success(`"${data.name}" added at ${data.time}`)
@@ -61,6 +61,7 @@ export function DashboardContent() {
               name: reminder.name,
               time: reminder.time,
               category: reminder.category,
+              duration: reminder.duration,
             })
             setReminders((prev) => [...prev, restored])
           },
