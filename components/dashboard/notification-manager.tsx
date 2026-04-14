@@ -1,6 +1,8 @@
 "use client"
 
 import { useEffect, useRef, useCallback, useState } from "react"
+import { Capacitor } from "@capacitor/core"
+import { LocalNotifications } from "@capacitor/local-notifications"
 
 import { snoozeReminder, getReminders, CATEGORY_CONFIG, markNotified, getLocalDateStr } from "@/lib/reminders"
 import type { Reminder, ReminderCategory } from "@/lib/reminders"
@@ -28,32 +30,100 @@ const CATEGORY_EMOJI: Record<ReminderCategory, string> = {
   custom: "📌",
 }
 
+// Generate a safe integer ID based on UUID for native plugins
+function hashId(idString: string): number {
+  let hash = 0
+  for (let i = 0; i < idString.length; i++) {
+    hash = (hash << 5) - hash + idString.charCodeAt(i)
+    hash |= 0
+  }
+  return Math.abs(hash)
+}
+
+function isCompletedToday(reminder: Reminder, todayStr: string): boolean {
+  return reminder.history?.some(
+    (h) => h.date === todayStr && h.completed
+  ) ?? false
+}
+
+// Abstract Notification Layer Wrapper
+async function sendNotification(title: string, body: string, reminderId?: string) {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      if ((await LocalNotifications.checkPermissions()).display === 'granted') {
+        // Immediate trigger for snoozed/manual tasks dynamically if needed natively
+        await LocalNotifications.schedule({
+          notifications: [{
+            title,
+            body,
+            id: hashId(reminderId || title),
+            schedule: { at: new Date() }
+          }]
+        })
+      }
+    } catch (err) {
+      console.warn("Native notification trigger failed", err)
+    }
+  } else if (typeof window !== "undefined" && "Notification" in window) {
+    console.log("Notification permission:", Notification.permission)
+    if (Notification.permission === "granted") {
+      try {
+        new Notification(title, {
+          body,
+          tag: reminderId || title,
+          icon: "/favicon.ico",
+        })
+      } catch (err) {
+        console.warn("Failed to fire Notification constructor:", err)
+      }
+    } else {
+      console.warn("Notification permission blocked, skipped system push.")
+    }
+  }
+}
+
 export function NotificationManager({
   reminders,
   onComplete,
   onSnooze,
 }: NotificationManagerProps) {
   const notifiedRef = useRef<Set<string>>(new Set())
-  const [permissionState, setPermissionState] = useState<NotificationPermission>("granted")
+  const [permissionState, setPermissionState] = useState<string>("default")
   const [showBanner, setShowBanner] = useState(false)
   const [activeNotifications, setActiveNotifications] = useState<ActiveNotification[]>([])
 
+  // Initialization check for permission
   useEffect(() => {
-    if (typeof window === "undefined" || !("Notification" in window)) return
-    const perm = Notification.permission
-    setPermissionState(perm)
-    // Only show banner if permission is default or denied
-    if (perm === "default" || perm === "denied") {
-      setShowBanner(true)
+    const initPerms = async () => {
+      if (Capacitor.isNativePlatform()) {
+        const perm = await LocalNotifications.checkPermissions()
+        setPermissionState(perm.display)
+        if (perm.display === "prompt" || perm.display === "denied") {
+          setShowBanner(true)
+        }
+      } else {
+        if (typeof window === "undefined" || !("Notification" in window)) return
+        const perm = Notification.permission
+        setPermissionState(perm)
+        if (perm === "default" || perm === "denied") {
+          setShowBanner(true)
+        }
+      }
     }
+    initPerms()
   }, [])
 
-  const requestPermission = useCallback(() => {
-    if (typeof window === "undefined" || !("Notification" in window)) return
-    Notification.requestPermission().then((perm) => {
+  const requestPermission = useCallback(async () => {
+    if (Capacitor.isNativePlatform()) {
+      const result = await LocalNotifications.requestPermissions()
+      setPermissionState(result.display)
+      setShowBanner(false)
+    } else {
+      if (typeof window === "undefined" || !("Notification" in window)) return
+      const perm = await Notification.requestPermission()
       setPermissionState(perm)
       setShowBanner(false)
-    })
+    }
   }, [])
 
   const dismissNotification = useCallback((notifId: string) => {
@@ -81,105 +151,146 @@ export function NotificationManager({
     (reminder: Reminder) => {
       const notifId = `${reminder.id}-${Date.now()}`
 
-      // Add in-app notification card
-      setActiveNotifications((prev) => [
-        ...prev,
-        { id: notifId, reminder, timestamp: Date.now() },
-      ])
+      setActiveNotifications((prev) => {
+        if (prev.some(n => n.reminder.id === reminder.id)) return prev
+        return [...prev, { id: notifId, reminder, timestamp: Date.now() }]
+      })
 
-      // Auto-dismiss after 30s
       setTimeout(() => {
         setActiveNotifications((prev) => prev.filter((n) => n.id !== notifId))
       }, 30000)
 
-      // Show in-app sonner toast
-      toast.info(reminder.name, {
-        description: "Time to complete your habit",
+      toast.info("Reminder triggered", {
+        description: reminder.name,
       })
 
-      // Browser notification
-      if (permissionState === "granted") {
-        try {
-          const emoji = CATEGORY_EMOJI[reminder.category] || "🔔"
-          new Notification(`${emoji} ${reminder.name}`, {
-            body: "Time to complete your habit",
-            tag: reminder.id,
-            icon: "/favicon.ico",
-          })
-        } catch {
-          // Notification might not be supported
-        }
-      }
+      // Try triggering OS notification through abstract wrapper (For Snooze or Web triggers)
+      sendNotification("HabitPulse", `Time to complete "${reminder.name}"`, reminder.id)
     },
-    [permissionState]
+    []
   )
 
+  // ----------------------------------------------------
+  // NATIVE APP SCHEDULING (Capacitor Exclusive logic)
+  // ----------------------------------------------------
   useEffect(() => {
-    const checkReminders = () => {
-      const now = new Date()
-      const today = getLocalDateStr(now)
-      
-      let lastCheckedTime = now.getTime() - 60000
+    if (!Capacitor.isNativePlatform()) return
+
+    const syncNativeSchedules = async () => {
       try {
-        const lastCheckedStr = localStorage.getItem("lastCheckedTime")
-        if (lastCheckedStr) lastCheckedTime = parseInt(lastCheckedStr, 10)
-      } catch {}
+        const pending = await LocalNotifications.getPending()
+        if (pending.notifications.length > 0) {
+          await LocalNotifications.cancel(pending)
+        }
 
-      const currentReminders = getReminders()
+        const toSchedule = reminders.map((reminder) => {
+          const [h, m] = reminder.time.split(":").map(Number)
+          const scheduledTime = new Date()
+          scheduledTime.setHours(h, m, 0, 0)
 
-      currentReminders.forEach((reminder) => {
-        if (reminder.completed) return
+          const todayStr = getLocalDateStr(new Date())
 
-        // Check snoozed reminders
-        if (reminder.snoozedUntil) {
-          const snoozedUntil = new Date(reminder.snoozedUntil)
-          if (now < snoozedUntil) return // still snoozing
+          // If time passed today OR it is already completed today, schedule specifically for TOMORROW
+          if (scheduledTime.getTime() <= Date.now() || isCompletedToday(reminder, todayStr)) {
+            scheduledTime.setDate(scheduledTime.getDate() + 1)
+          }
 
-          // Snooze has expired — trigger the notification
+          return {
+            title: "HabitPulse",
+            body: `Time to complete "${reminder.name}"`,
+            id: hashId(reminder.id),
+            schedule: { at: scheduledTime, allowWhileIdle: true },
+          }
+        })
+
+        if (toSchedule.length > 0) {
+          await LocalNotifications.schedule({ notifications: toSchedule })
+          console.log(`[CAPACITOR] Scheduled ${toSchedule.length} native habits efficiently.`)
+        }
+      } catch (err) {
+        console.warn("Native scheduling error:", err)
+      }
+    }
+
+    syncNativeSchedules()
+  }, [reminders])
+
+  // ----------------------------------------------------
+  // WEB APP DYNAMIC POLLING (Browser Background logic)
+  // ----------------------------------------------------
+  const checkReminders = useCallback(() => {
+    // If we're on a real native phone app, we STOP polling since Native Schedules run in the absolute OS background.
+    if (Capacitor.isNativePlatform()) return
+
+    const now = new Date()
+    const today = getLocalDateStr(now)
+    
+    let lastCheckedTime = now.getTime() - 30000 // default to 30s ago
+    try {
+      const lastCheckedStr = localStorage.getItem("lastCheckedTime")
+      if (lastCheckedStr) lastCheckedTime = parseInt(lastCheckedStr, 10)
+    } catch {}
+
+    const currentReminders = getReminders()
+
+    currentReminders.forEach((reminder) => {
+      if (reminder.completed) return
+
+      // Check snoozed reminders first
+      if (reminder.snoozedUntil) {
+        const snoozedUntil = new Date(reminder.snoozedUntil)
+        if (now.getTime() >= snoozedUntil.getTime()) {
           const notifKey = `${reminder.id}-snoozed-${reminder.snoozedUntil}`
           if (!notifiedRef.current.has(notifKey)) {
             notifiedRef.current.add(notifKey)
             triggerNotification(reminder)
           }
-          return
         }
+        return
+      }
 
-        // Normal time-based check with 1-minute window
-        const [h, m] = reminder.time.split(":").map(Number)
-        const scheduledTime = new Date(now)
-        scheduledTime.setHours(h, m, 0, 0)
-        
-        const diffInSeconds = (now.getTime() - scheduledTime.getTime()) / 1000
-        
-        // Detect if missed during inactive period
-        const missedInactive = scheduledTime.getTime() > lastCheckedTime && scheduledTime.getTime() <= now.getTime()
-
-        if (
-          ((diffInSeconds >= 0 && diffInSeconds <= 60) || missedInactive) && 
-          reminder.lastNotifiedDate !== today
-        ) {
-          // Immediately block repeated triggers
-          reminder.lastNotifiedDate = today
-          markNotified(reminder.id)
-          triggerNotification(reminder)
-        }
-      })
+      // Time parsing
+      const [h, m] = reminder.time.split(":").map(Number)
+      const scheduledTime = new Date(now)
+      scheduledTime.setHours(h, m, 0, 0)
       
-      try {
-        localStorage.setItem("lastCheckedTime", now.getTime().toString())
-      } catch {}
-    }
+      const diffInSeconds = (now.getTime() - scheduledTime.getTime()) / 1000
+      const isWithinWindow = diffInSeconds >= -30 && diffInSeconds <= 120
+      
+      const missedInactive = scheduledTime.getTime() > lastCheckedTime && scheduledTime.getTime() <= now.getTime()
 
-    // Run initially, then set interval to trigger every 30 seconds
+      if ((isWithinWindow || missedInactive) && reminder.lastNotifiedDate !== today) {
+        console.log("TRIGGERING NOTIFICATION:", reminder.name)
+        reminder.lastNotifiedDate = today
+        markNotified(reminder.id)
+        triggerNotification(reminder)
+      }
+    })
+    
+    try {
+      localStorage.setItem("lastCheckedTime", now.getTime().toString())
+    } catch {}
+  }, [triggerNotification])
+
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) return
+
     checkReminders()
     const interval = setInterval(checkReminders, 30000)
 
-    return () => clearInterval(interval)
-  }, [reminders, triggerNotification])
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") checkReminders()
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+    }
+  }, [checkReminders])
 
   return (
     <>
-      {/* Permission Banner */}
       <AnimatePresence>
         {showBanner && (
           <motion.div
@@ -195,14 +306,14 @@ export function NotificationManager({
                   <BellRing className="h-4 w-4 text-white" />
                 </div>
                 <p className="text-sm font-medium text-white/90">
-                  {permissionState === "default" 
+                  {(permissionState === "default" || permissionState === "prompt")
                     ? "Enable notifications to get habit reminders."
-                    : "Notifications are blocked. Enable from browser settings."
+                    : "Notifications are blocked. Enable from settings."
                   }
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                {permissionState === "default" && (
+                {(permissionState === "default" || permissionState === "prompt") && (
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
@@ -224,8 +335,7 @@ export function NotificationManager({
         )}
       </AnimatePresence>
 
-      {/* In-App Notification Cards */}
-      <div className="fixed top-20 right-4 z-[100] flex flex-col gap-3 w-[350px] max-w-[calc(100vw-2rem)]">
+      <div className="fixed top-20 right-4 z-[100] flex flex-col gap-3 w-[350px] max-w-[calc(100vw-2rem)] pointer-events-none">
         <AnimatePresence mode="sync">
           {activeNotifications.map((notif) => {
             const cat = CATEGORY_CONFIG[notif.reminder.category]
@@ -237,7 +347,7 @@ export function NotificationManager({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.9, y: -10 }}
                 transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                className="relative overflow-hidden rounded-[20px] border border-white/10 bg-[#121214] shadow-[0_10px_40px_rgba(0,0,0,0.8)] backdrop-blur-xl p-4"
+                className="relative pointer-events-auto overflow-hidden rounded-[20px] border border-white/10 bg-[#121214] shadow-[0_10px_40px_rgba(0,0,0,0.8)] backdrop-blur-xl p-4"
               >
                 <div className="flex items-start gap-4">
                   <div className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/5 border border-white/10`}>
@@ -269,7 +379,6 @@ export function NotificationManager({
                   </button>
                 </div>
 
-                {/* Action buttons */}
                 <div className="mt-4 flex items-center gap-2">
                   <motion.button
                     whileHover={{ scale: 1.02 }}
@@ -291,7 +400,6 @@ export function NotificationManager({
                   </motion.button>
                 </div>
 
-                {/* Auto-dismiss progress bar (white/20 style) */}
                 <motion.div
                   initial={{ scaleX: 1 }}
                   animate={{ scaleX: 0 }}
@@ -306,3 +414,4 @@ export function NotificationManager({
     </>
   )
 }
+

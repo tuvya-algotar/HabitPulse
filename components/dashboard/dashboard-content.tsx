@@ -59,7 +59,7 @@ export function DashboardContent() {
     setReminders(updated)
     const reminder = updated.find((r) => r.id === id)
     if (reminder?.completed) {
-      toast.success(`"${reminder.name}" completed!`)
+      toast.success(`Completed`)
     }
   }, [])
 
@@ -202,12 +202,17 @@ export function DashboardContent() {
         onSnooze={handleSnooze}
       />
 
-      <main className="relative mx-auto w-full max-w-5xl flex-1 p-6 z-10">
+      <motion.main 
+        initial={{ opacity: 0 }} 
+        animate={{ opacity: 1 }} 
+        transition={{ duration: 0.3, ease: "easeOut" }}
+        className="relative mx-auto w-full max-w-5xl flex-1 p-6 z-10"
+      >
         {/* Hero section */}
         <motion.div
-          initial={{ opacity: 0, y: 30 }}
+          initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+          transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
           className="flex flex-col items-center gap-8 sm:flex-row sm:justify-between pt-8 pb-4"
         >
           <div className="flex flex-col items-center gap-2 sm:items-start text-center sm:text-left">
@@ -221,6 +226,17 @@ export function DashboardContent() {
                 day: "numeric",
               })}
             </p>
+            {totalCount > 0 && (
+              <motion.p 
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="mt-3 text-xs sm:text-sm font-semibold text-emerald-500 bg-emerald-500/10 px-3 py-1.5 rounded-full border border-emerald-500/20 shadow-sm"
+              >
+                {todayFocusHabits.length > 0 
+                  ? `${todayFocusHabits.length} task${todayFocusHabits.length !== 1 ? 's' : ''} left today` 
+                  : "You're done for today 🎉"}
+              </motion.p>
+            )}
           </div>
           <ProgressRing completed={completedCount} total={totalCount} />
         </motion.div>
@@ -229,7 +245,7 @@ export function DashboardContent() {
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+          transition={{ delay: 0.1, duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
           className="mt-6 flex justify-center sm:justify-start"
         >
           <AddReminderDialog onAdd={handleAdd} />
@@ -326,9 +342,11 @@ export function DashboardContent() {
               </div>
             </div>
 
-            {filteredTotal === 0 && filter !== "all" && (
+            {filteredTotal === 0 && (
               <div className="flex items-center justify-center p-8 border border-dashed border-theme-border rounded-2xl bg-theme-card/30">
-                <p className="text-theme-text-muted">No habits in this category</p>
+                <p className="text-theme-text-muted">
+                  {filter === "all" ? "No habits scheduled for today" : "No habits in this category"}
+                </p>
               </div>
             )}
 
@@ -354,28 +372,25 @@ export function DashboardContent() {
                   </div>
                   <div className="flex flex-col gap-4">
                     <AnimatePresence mode="popLayout">
-                      {missedReminders.slice(0, 5).map((reminder, i) => (
+                      {missedReminders.slice(0, 3).map((reminder, i) => (
                         <div key={reminder.id} className="relative group mt-3">
                           {/* Snooze Options */}
-                          <div className="absolute -top-3 right-2 z-10 flex gap-2 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                          <div className="absolute -top-4 right-2 z-10 flex gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                             <button
                               onClick={() => handleSnoozeItem(reminder.id, 30)}
-                              className="text-[10px] uppercase tracking-wider font-bold bg-[#1a1a1c] border border-amber-500/20 text-amber-500 px-2 py-1 rounded shadow-lg hover:bg-amber-500/10 transition-colors"
+                              className="text-[11px] uppercase tracking-wider font-bold bg-[#1a1a1c] border border-amber-500/20 text-amber-500 px-3 min-h-[40px] flex items-center justify-center rounded-xl shadow-lg hover:bg-amber-500/10 transition-colors"
                             >
                               +30m
                             </button>
                             <button
                               onClick={() => handleSnoozeItem(reminder.id, 60)}
-                              className="text-[10px] uppercase tracking-wider font-bold bg-[#1a1a1c] border border-amber-500/20 text-amber-500 px-2 py-1 rounded shadow-lg hover:bg-amber-500/10 transition-colors"
+                              className="text-[11px] uppercase tracking-wider font-bold bg-[#1a1a1c] border border-amber-500/20 text-amber-500 px-3 min-h-[40px] flex items-center justify-center rounded-xl shadow-lg hover:bg-amber-500/10 transition-colors"
                             >
                               +1h
                             </button>
                           </div>
                           
-                          <p className="absolute -top-5 left-2 text-[11px] font-medium text-amber-500/80">
-                            Was scheduled at {reminder.time}
-                          </p>
-                          <div className="border border-amber-500/10 rounded-2xl relative overflow-hidden bg-amber-500/[0.02]">
+                          <div className="border border-amber-500/10 rounded-2xl relative overflow-hidden bg-amber-500/[0.02] mt-3">
                             <ReminderCard
                               key={`missed-${reminder.id}`}
                               reminder={reminder}
@@ -466,7 +481,7 @@ export function DashboardContent() {
             </AnimatePresence>
           </div>
         )}
-      </main>
+      </motion.main>
 
       <footer className="w-full pb-8 pt-4 flex flex-col items-center text-center opacity-50 z-10 transition-opacity hover:opacity-100">
         <p className="text-xs font-mono text-theme-text-muted flex items-center gap-2">

@@ -53,7 +53,7 @@ export function AddReminderDialog({ onAdd }: AddReminderDialogProps) {
   const [targetValue, setTargetValue] = useState(5)
   const [targetDuration, setTargetDuration] = useState(15)
   
-  const [showPresets, setShowPresets] = useState(true)
+  const [showPresets, setShowPresets] = useState(false)
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()

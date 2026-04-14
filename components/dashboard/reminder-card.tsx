@@ -127,13 +127,13 @@ export function ReminderCard({ reminder, onToggle, onDelete, onEdit, index }: Re
   return (
     <motion.div
       layout
-      initial={{ opacity: 0, y: 20, scale: 0.95 }}
+      initial={{ opacity: 0, y: 15, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, x: -30, scale: 0.95 }}
+      exit={{ opacity: 0, x: -20, scale: 0.98 }}
       transition={{
-        duration: 0.4,
-        delay: index * 0.05,
-        layout: { duration: 0.3, ease: [0.16, 1, 0.3, 1] },
+        duration: 0.3,
+        delay: Math.min(index * 0.05, 0.2),
+        layout: { duration: 0.25, ease: [0.16, 1, 0.3, 1] },
         ease: [0.16, 1, 0.3, 1],
       }}
       className={`group relative flex flex-col sm:flex-row sm:items-center gap-4 overflow-hidden rounded-xl border p-4 sm:p-5 transition-all duration-500 ${
@@ -306,7 +306,7 @@ export function ReminderCard({ reminder, onToggle, onDelete, onEdit, index }: Re
         <motion.div
           initial={false}
           animate={{ opacity: 1 }}
-          className="md:opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center gap-1 mt-3 sm:mt-0"
+          className="opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center gap-1 mt-3 sm:mt-0"
         >
           <EditReminderDialog reminder={reminder} onEdit={onEdit} />
           <button
