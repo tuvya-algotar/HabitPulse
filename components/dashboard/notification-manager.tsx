@@ -1,14 +1,21 @@
 "use client"
 
 import { useEffect, useRef, useCallback, useState } from "react"
-import { Capacitor } from "@capacitor/core"
-import { LocalNotifications } from "@capacitor/local-notifications"
 
 import { snoozeReminder, getReminders, CATEGORY_CONFIG, markNotified, getLocalDateStr } from "@/lib/reminders"
 import type { Reminder, ReminderCategory } from "@/lib/reminders"
 import { BellRing, X, Clock, CheckCircle, AlarmClock } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { toast } from "sonner"
+
+// TypeScript: expose Electron's preload bridge on window
+declare global {
+  interface Window {
+    electronAPI?: {
+      notify: (data: { title: string; body: string }) => void
+    }
+  }
+}
 
 interface NotificationManagerProps {
   reminders: Reminder[]
@@ -47,24 +54,18 @@ function isCompletedToday(reminder: Reminder, todayStr: string): boolean {
 }
 
 // Abstract Notification Layer Wrapper
+// Routes to Electron native notification when available, falls back to Web Notification API.
 async function sendNotification(title: string, body: string, reminderId?: string) {
-  if (Capacitor.isNativePlatform()) {
-    try {
-      if ((await LocalNotifications.checkPermissions()).display === 'granted') {
-        // Immediate trigger for snoozed/manual tasks dynamically if needed natively
-        await LocalNotifications.schedule({
-          notifications: [{
-            title,
-            body,
-            id: hashId(reminderId || title),
-            schedule: { at: new Date() }
-          }]
-        })
-      }
-    } catch (err) {
-      console.warn("Native notification trigger failed", err)
-    }
-  } else if (typeof window !== "undefined" && "Notification" in window) {
+  if (typeof window === "undefined") return
+
+  // ── Electron desktop path ──────────────────────────────────────────────────
+  if (window.electronAPI) {
+    window.electronAPI.notify({ title, body })
+    return
+  }
+
+  // ── Browser (Web Notification API) fallback ────────────────────────────────
+  if ("Notification" in window) {
     console.log("Notification permission:", Notification.permission)
     if (Notification.permission === "granted") {
       try {
@@ -95,35 +96,21 @@ export function NotificationManager({
   // Initialization check for permission
   useEffect(() => {
     const initPerms = async () => {
-      if (Capacitor.isNativePlatform()) {
-        const perm = await LocalNotifications.checkPermissions()
-        setPermissionState(perm.display)
-        if (perm.display === "prompt" || perm.display === "denied") {
-          setShowBanner(true)
-        }
-      } else {
-        if (typeof window === "undefined" || !("Notification" in window)) return
-        const perm = Notification.permission
-        setPermissionState(perm)
-        if (perm === "default" || perm === "denied") {
-          setShowBanner(true)
-        }
+      if (typeof window === "undefined" || !("Notification" in window)) return
+      const perm = Notification.permission
+      setPermissionState(perm)
+      if (perm === "default" || perm === "denied") {
+        setShowBanner(true)
       }
     }
     initPerms()
   }, [])
 
   const requestPermission = useCallback(async () => {
-    if (Capacitor.isNativePlatform()) {
-      const result = await LocalNotifications.requestPermissions()
-      setPermissionState(result.display)
-      setShowBanner(false)
-    } else {
-      if (typeof window === "undefined" || !("Notification" in window)) return
-      const perm = await Notification.requestPermission()
-      setPermissionState(perm)
-      setShowBanner(false)
-    }
+    if (typeof window === "undefined" || !("Notification" in window)) return
+    const perm = await Notification.requestPermission()
+    setPermissionState(perm)
+    setShowBanner(false)
   }, [])
 
   const dismissNotification = useCallback((notifId: string) => {
@@ -171,57 +158,13 @@ export function NotificationManager({
   )
 
   // ----------------------------------------------------
-  // NATIVE APP SCHEDULING (Capacitor Exclusive logic)
+  // NATIVE APP SCHEDULING (Capacitor Exclusive logic removed)
   // ----------------------------------------------------
-  useEffect(() => {
-    if (!Capacitor.isNativePlatform()) return
-
-    const syncNativeSchedules = async () => {
-      try {
-        const pending = await LocalNotifications.getPending()
-        if (pending.notifications.length > 0) {
-          await LocalNotifications.cancel(pending)
-        }
-
-        const toSchedule = reminders.map((reminder) => {
-          const [h, m] = reminder.time.split(":").map(Number)
-          const scheduledTime = new Date()
-          scheduledTime.setHours(h, m, 0, 0)
-
-          const todayStr = getLocalDateStr(new Date())
-
-          // If time passed today OR it is already completed today, schedule specifically for TOMORROW
-          if (scheduledTime.getTime() <= Date.now() || isCompletedToday(reminder, todayStr)) {
-            scheduledTime.setDate(scheduledTime.getDate() + 1)
-          }
-
-          return {
-            title: "HabitPulse",
-            body: `Time to complete "${reminder.name}"`,
-            id: hashId(reminder.id),
-            schedule: { at: scheduledTime, allowWhileIdle: true },
-          }
-        })
-
-        if (toSchedule.length > 0) {
-          await LocalNotifications.schedule({ notifications: toSchedule })
-          console.log(`[CAPACITOR] Scheduled ${toSchedule.length} native habits efficiently.`)
-        }
-      } catch (err) {
-        console.warn("Native scheduling error:", err)
-      }
-    }
-
-    syncNativeSchedules()
-  }, [reminders])
 
   // ----------------------------------------------------
   // WEB APP DYNAMIC POLLING (Browser Background logic)
   // ----------------------------------------------------
   const checkReminders = useCallback(() => {
-    // If we're on a real native phone app, we STOP polling since Native Schedules run in the absolute OS background.
-    if (Capacitor.isNativePlatform()) return
-
     const now = new Date()
     const today = getLocalDateStr(now)
     
@@ -273,8 +216,6 @@ export function NotificationManager({
   }, [triggerNotification])
 
   useEffect(() => {
-    if (Capacitor.isNativePlatform()) return
-
     checkReminders()
     const interval = setInterval(checkReminders, 30000)
 
