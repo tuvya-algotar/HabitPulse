@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { toast } from "sonner"
 import {
-  getReminders,
+  getActiveReminders,
   addReminder,
   toggleReminder,
   deleteReminder,
@@ -11,9 +11,13 @@ import {
   editReminder,
   getLocalDateStr,
   snoozeReminder,
+  isCompletedToday,
+  getEffectiveTime,
 } from "@/lib/reminders"
 import type { Reminder, ReminderCategory } from "@/lib/reminders"
 import { computeMetrics } from "@/lib/insight-engine"
+import { computeFocusScores } from "@/lib/focus-engine"
+import { SNOOZE_DURATIONS } from "@/lib/constants"
 import { DashboardHeader } from "./dashboard-header"
 import { ProgressRing } from "./progress-ring"
 import { ReminderCard } from "./reminder-card"
@@ -31,7 +35,7 @@ export function DashboardContent() {
 
   useEffect(() => {
     setMounted(true)
-    setReminders(getReminders())
+    setReminders(getActiveReminders())
     
     // Check onboarding
     const hasVisited = localStorage.getItem("habitpulse_hasVisited")
@@ -46,7 +50,7 @@ export function DashboardContent() {
   }, [])
 
   const handleAdd = useCallback(
-    (data: Omit<Reminder, "id" | "completed" | "createdAt">) => {
+    (data: Omit<Reminder, "id" | "createdAt">) => {
       const newReminder = addReminder(data)
       setReminders((prev) => [...prev, newReminder])
       toast.success(`"${data.name}" added at ${data.time}`)
@@ -58,13 +62,13 @@ export function DashboardContent() {
     const updated = toggleReminder(id)
     setReminders(updated)
     const reminder = updated.find((r) => r.id === id)
-    if (reminder?.completed) {
+    if (reminder && isCompletedToday(reminder)) {
       toast.success(`Completed`)
     }
   }, [])
 
   const handleDelete = useCallback((id: string) => {
-    const current = getReminders()
+    const current = getActiveReminders()
     const reminder = current.find((r) => r.id === id)
     const updated = deleteReminder(id)
     setReminders(updated)
@@ -93,18 +97,13 @@ export function DashboardContent() {
     toast.info("All reminders reset for a new day!")
   }, [])
 
-  const handleSnooze = useCallback(() => {
-    setReminders(getReminders())
-  }, [])
-
-  const handleSnoozeItem = useCallback((id: string, minutes: number) => {
-    snoozeReminder(id, minutes)
-    setReminders(getReminders())
-    toast.success(`Habit snoozed for ${minutes >= 60 ? '1 hour' : '30 minutes'}`)
+  const handleSnooze = useCallback((id: string, minutes: number) => {
+    const updated = snoozeReminder(id, minutes)
+    setReminders(updated)
   }, [])
 
   const handleRefreshData = useCallback(() => {
-    setReminders(getReminders())
+    setReminders(getActiveReminders())
   }, [])
 
   const handleEdit = useCallback((id: string, updates: Partial<Reminder>) => {
@@ -113,6 +112,67 @@ export function DashboardContent() {
     toast.success("Reminder updated successfully")
   }, [])
 
+  // ── All derived state (must be before any early return) ────────────────────
+  const derivedData = useMemo(() => {
+    const now = new Date()
+    const currentTotalMinutes = now.getHours() * 60 + now.getMinutes()
+    const todayStr = getLocalDateStr(now)
+
+    const isMissed = (reminder: Reminder): boolean => {
+      if (isCompletedToday(reminder)) return false
+      if (reminder.snoozedUntil) {
+        if (new Date(reminder.snoozedUntil).getTime() > Date.now()) return false
+      }
+      const [h, m] = reminder.time.split(":").map(Number)
+      const scheduledMinutes = h * 60 + m
+      return scheduledMinutes < currentTotalMinutes && reminder.lastNotifiedDate !== todayStr
+    }
+
+    const matchesFilter = (r: Reminder) => {
+      if (filter === "all") return true
+      if (filter === "morning") return parseInt(r.time.split(":")[0], 10) < 12
+      if (filter === "evening") return parseInt(r.time.split(":")[0], 10) >= 17
+      return r.category === filter
+    }
+
+    const completed = reminders.filter(isCompletedToday).filter(matchesFilter)
+      .sort((a, b) => getEffectiveTime(a).getTime() - getEffectiveTime(b).getTime())
+    const incomplete = reminders.filter((r) => !isCompletedToday(r))
+    const missed = incomplete.filter(isMissed).filter(matchesFilter)
+      .sort((a, b) => getEffectiveTime(a).getTime() - getEffectiveTime(b).getTime())
+    const notMissed = incomplete.filter((r) => !isMissed(r)).filter(matchesFilter)
+      .sort((a, b) => getEffectiveTime(a).getTime() - getEffectiveTime(b).getTime())
+
+    const focus = computeFocusScores(reminders)
+      .slice(0, 3)
+      .map((f) => f.reminder)
+
+    const metrics = computeMetrics(reminders)
+
+    return {
+      todayFocusHabits: focus,
+      activeReminders: notMissed,
+      completedReminders: completed,
+      missedReminders: missed,
+      incompleteTodayCount: incomplete.length,
+      completedCount: metrics.daily.completed,
+      totalCount: metrics.daily.total,
+      filteredTotal: missed.length + notMissed.length + completed.length,
+    }
+  }, [reminders, filter])
+
+  const {
+    todayFocusHabits,
+    activeReminders,
+    completedReminders,
+    missedReminders,
+    incompleteTodayCount,
+    completedCount,
+    totalCount,
+    filteredTotal,
+  } = derivedData
+
+  // ── Early return (after all hooks) ──────────────────────────────────────────
   if (!mounted) {
     return (
       <div className="flex min-h-screen flex-col bg-theme-base">
@@ -135,58 +195,6 @@ export function DashboardContent() {
       </div>
     )
   }
-
-  const now = new Date()
-  const currentTotalMinutes = now.getHours() * 60 + now.getMinutes()
-  const todayStr = getLocalDateStr(now)
-
-  const isCompletedToday = (r: Reminder) => {
-    const todayHistory = r.history?.find((h) => h.date === todayStr)
-    return todayHistory?.completed === true
-  }
-
-  const isMissed = (reminder: Reminder) => {
-    if (isCompletedToday(reminder)) return false
-    const [h, m] = reminder.time.split(":").map(Number)
-    const scheduledMinutes = h * 60 + m
-    return scheduledMinutes < currentTotalMinutes && reminder.lastNotifiedDate !== todayStr
-  }
-
-  const matchesFilter = (r: Reminder) => {
-    if (filter === "all") return true
-    if (filter === "morning") return parseInt(r.time.split(":")[0], 10) < 12
-    if (filter === "evening") return parseInt(r.time.split(":")[0], 10) >= 17
-    return r.category === filter
-  }
-
-  const missedReminders = reminders
-    .filter(isMissed)
-    .filter(matchesFilter)
-    .sort((a, b) => a.time.localeCompare(b.time))
-    
-  const activeReminders = reminders
-    .filter((r) => !isCompletedToday(r) && !isMissed(r))
-    .filter(matchesFilter)
-    .sort((a, b) => a.time.localeCompare(b.time))
-    
-  const metrics = computeMetrics(reminders)
-  const completedCount = metrics.daily.completed
-  const totalCount = metrics.daily.total
-
-  const completedReminders = reminders
-    .filter((r) => {
-      const todayHistory = r.history?.find((h) => h.date === todayStr)
-      return todayHistory?.completed === true
-    })
-    .filter(matchesFilter)
-    .sort((a, b) => a.time.localeCompare(b.time))
-
-  const filteredTotal = missedReminders.length + activeReminders.length + completedReminders.length
-
-  const todayFocusHabits = reminders
-    .filter((r) => !isCompletedToday(r))
-    .sort((a, b) => a.time.localeCompare(b.time))
-    .slice(0, 3)
 
   return (
     <div className="relative flex min-h-screen flex-col bg-theme-base text-theme-text transition-colors duration-300">
@@ -232,8 +240,8 @@ export function DashboardContent() {
                 animate={{ opacity: 1, scale: 1 }}
                 className="mt-3 text-xs sm:text-sm font-semibold text-emerald-500 bg-emerald-500/10 px-3 py-1.5 rounded-full border border-emerald-500/20 shadow-sm"
               >
-                {todayFocusHabits.length > 0 
-                  ? `${todayFocusHabits.length} task${todayFocusHabits.length !== 1 ? 's' : ''} left today` 
+                {incompleteTodayCount > 0 
+                  ? `${incompleteTodayCount} task${incompleteTodayCount !== 1 ? 's' : ''} left today` 
                   : "You're done for today 🎉"}
               </motion.p>
             )}
@@ -279,7 +287,7 @@ export function DashboardContent() {
                     Today's Focus
                   </h2>
                   <span className="ml-auto text-xs font-medium text-emerald-500/80 bg-emerald-500/10 px-2 py-0.5 rounded-full">
-                    {todayFocusHabits.length} task{todayFocusHabits.length !== 1 ? 's' : ''} left today
+                    {incompleteTodayCount} task{incompleteTodayCount !== 1 ? 's' : ''} left today
                   </span>
                 </div>
                 
@@ -377,13 +385,13 @@ export function DashboardContent() {
                           {/* Snooze Options */}
                           <div className="absolute -top-4 right-2 z-10 flex gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                             <button
-                              onClick={() => handleSnoozeItem(reminder.id, 30)}
+                              onClick={() => handleSnooze(reminder.id, SNOOZE_DURATIONS.short)}
                               className="text-[11px] uppercase tracking-wider font-bold bg-[#1a1a1c] border border-amber-500/20 text-amber-500 px-3 min-h-[40px] flex items-center justify-center rounded-xl shadow-lg hover:bg-amber-500/10 transition-colors"
                             >
                               +30m
                             </button>
                             <button
-                              onClick={() => handleSnoozeItem(reminder.id, 60)}
+                              onClick={() => handleSnooze(reminder.id, SNOOZE_DURATIONS.long)}
                               className="text-[11px] uppercase tracking-wider font-bold bg-[#1a1a1c] border border-amber-500/20 text-amber-500 px-3 min-h-[40px] flex items-center justify-center rounded-xl shadow-lg hover:bg-amber-500/10 transition-colors"
                             >
                               +1h

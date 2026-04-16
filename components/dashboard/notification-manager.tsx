@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useCallback, useState } from "react"
 
-import { snoozeReminder, getReminders, CATEGORY_CONFIG, markNotified, getLocalDateStr } from "@/lib/reminders"
+import { getActiveReminders, CATEGORY_CONFIG, markNotified, getLocalDateStr, isCompletedToday, getEffectiveTime } from "@/lib/reminders"
 import type { Reminder, ReminderCategory } from "@/lib/reminders"
+import { SNOOZE_DURATIONS } from "@/lib/constants"
 import { BellRing, X, Clock, CheckCircle, AlarmClock } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { toast } from "sonner"
@@ -20,7 +21,7 @@ declare global {
 interface NotificationManagerProps {
   reminders: Reminder[]
   onComplete: (id: string) => void
-  onSnooze: () => void
+  onSnooze: (id: string, minutes: number) => void
 }
 
 interface ActiveNotification {
@@ -47,11 +48,7 @@ function hashId(idString: string): number {
   return Math.abs(hash)
 }
 
-function isCompletedToday(reminder: Reminder, todayStr: string): boolean {
-  return reminder.history?.some(
-    (h) => h.date === todayStr && h.completed
-  ) ?? false
-}
+
 
 // Abstract Notification Layer Wrapper
 // Routes to Electron native notification when available, falls back to Web Notification API.
@@ -128,8 +125,7 @@ export function NotificationManager({
   const handleSnooze = useCallback(
     (notifId: string, reminder: Reminder) => {
       dismissNotification(notifId)
-      snoozeReminder(reminder.id, 5)
-      onSnooze()
+      onSnooze(reminder.id, SNOOZE_DURATIONS.short)
     },
     [dismissNotification, onSnooze]
   )
@@ -174,10 +170,10 @@ export function NotificationManager({
       if (lastCheckedStr) lastCheckedTime = parseInt(lastCheckedStr, 10)
     } catch {}
 
-    const currentReminders = getReminders()
+    const currentReminders = getActiveReminders()
 
     currentReminders.forEach((reminder) => {
-      if (reminder.completed) return
+      if (isCompletedToday(reminder)) return
 
       // Check snoozed reminders first
       if (reminder.snoozedUntil) {
@@ -193,9 +189,7 @@ export function NotificationManager({
       }
 
       // Time parsing
-      const [h, m] = reminder.time.split(":").map(Number)
-      const scheduledTime = new Date(now)
-      scheduledTime.setHours(h, m, 0, 0)
+      const scheduledTime = getEffectiveTime(reminder)
       
       const diffInSeconds = (now.getTime() - scheduledTime.getTime()) / 1000
       const isWithinWindow = diffInSeconds >= -30 && diffInSeconds <= 120
@@ -337,7 +331,7 @@ export function NotificationManager({
                     className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[13px] font-semibold text-white transition-all hover:bg-white/10"
                   >
                     <AlarmClock className="h-4 w-4" />
-                    Snooze 5m
+                    Snooze 30m
                   </motion.button>
                 </div>
 

@@ -18,7 +18,6 @@ export interface Reminder {
   name: string
   time: string // HH:mm format
   category: ReminderCategory
-  completed: boolean
   snoozedUntil?: string // ISO string
   createdAt: string // ISO string
   duration: number // Number of days
@@ -33,6 +32,22 @@ export interface Reminder {
 
 const STORAGE_KEY = "smart-habit-reminders"
 
+export function getEffectiveTime(reminder: Reminder): Date {
+  if (reminder.snoozedUntil) {
+    const snoozeDate = new Date(reminder.snoozedUntil)
+    if (snoozeDate > new Date()) {
+      return snoozeDate
+    }
+  }
+
+  const [h, m] = reminder.time.split(":").map(Number)
+  const now = new Date()
+  const scheduled = new Date(now)
+  scheduled.setHours(h, m, 0, 0)
+
+  return scheduled
+}
+
 export function getReminders(): Reminder[] {
   if (typeof window === "undefined") return []
   try {
@@ -43,21 +58,49 @@ export function getReminders(): Reminder[] {
   }
 }
 
-export function saveReminders(reminders: Reminder[]) {
+let saveTimeout: ReturnType<typeof setTimeout> | null = null
+
+export function saveReminders(reminders: Reminder[]): void {
   if (typeof window === "undefined") return
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(reminders))
-  } catch (error) {
-    console.error("Failed to save to localStorage:", error)
-  }
+
+  if (saveTimeout) clearTimeout(saveTimeout)
+
+  saveTimeout = setTimeout(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(reminders))
+    } catch (error) {
+      console.error("Failed to save to localStorage:", error)
+    }
+  }, 300)
 }
 
-export function addReminder(reminder: Omit<Reminder, "id" | "completed" | "createdAt">): Reminder {
+export function getActiveReminders(): Reminder[] {
+  const reminders = getReminders()
+  const now = new Date()
+
+  return reminders.filter((r) => {
+    if (!r.duration) return true
+
+    const created = new Date(r.createdAt)
+    const expiry = new Date(created)
+    expiry.setDate(expiry.getDate() + r.duration)
+
+    return now <= expiry
+  })
+}
+
+export function isCompletedToday(reminder: Reminder): boolean {
+  if (!reminder.history) return false
+  const todayStr = getLocalDateStr()
+  const entry = reminder.history.find((h) => h.date === todayStr)
+  return entry ? entry.completed : false
+}
+
+export function addReminder(reminder: Omit<Reminder, "id" | "createdAt">): Reminder {
   const newReminder: Reminder = {
     type: "binary",
     ...reminder,
     id: crypto.randomUUID(),
-    completed: false,
     createdAt: new Date().toISOString(),
     history: [],
   }
@@ -88,8 +131,8 @@ export function toggleReminder(id: string): Reminder[] {
   const reminders = getReminders()
   const updated = reminders.map((r) => {
     if (r.id === id) {
-      const isCompleted = !r.completed
-      const cloned = { ...r, completed: isCompleted }
+      const isCompleted = !isCompletedToday(r)
+      const cloned = { ...r }
       updateHistoryForToday(cloned, isCompleted)
       return cloned
     }
@@ -107,19 +150,11 @@ export function deleteReminder(id: string): Reminder[] {
 
 export function snoozeReminder(id: string, minutes: number): Reminder[] {
   const reminders = getReminders()
-  const snoozedUntil = new Date(Date.now() + minutes * 60 * 1000).toISOString()
   const updated = reminders.map((r) => {
     if (r.id !== id) return r
 
-    const now = new Date()
-    // Calculate new time from NOW, not original schedule, to guarantee it drops out of the missed queue
-    // Add an extra 1-minute buffer to ensure it doesn't instantly border the miss-window
-    const totalMinutes = now.getHours() * 60 + now.getMinutes() + minutes + 1
-    const newHour = Math.floor(totalMinutes / 60) % 24
-    const newMin = totalMinutes % 60
-    const newTime = `${String(newHour).padStart(2, "0")}:${String(newMin).padStart(2, "0")}`
-
-    return { ...r, time: newTime, snoozedUntil, lastNotifiedDate: null }
+    const snoozedUntil = new Date(Date.now() + minutes * 60 * 1000).toISOString()
+    return { ...r, snoozedUntil, lastNotifiedDate: null }
   })
   saveReminders(updated)
   return updated
@@ -136,7 +171,7 @@ export function resetDailyReminders(): Reminder[] {
     
     return {
       ...r,
-      completed: false,
+      history,
       snoozedUntil: undefined,
       currentValue: r.currentValue !== undefined ? 0 : undefined,
       currentDuration: r.currentDuration !== undefined ? 0 : undefined,
@@ -151,7 +186,7 @@ export function editReminder(id: string, updates: Partial<Reminder>): Reminder[]
   const updated = reminders.map((r) => {
     if (r.id === id) {
       const updatedReminder = { ...r, ...updates }
-      let newCompletedStatus = updatedReminder.completed
+      let newCompletedStatus = isCompletedToday(updatedReminder)
       
       // Auto-complete logic
       if (updatedReminder.type === "count" && updatedReminder.currentValue !== undefined && updatedReminder.targetValue !== undefined) {
@@ -161,7 +196,6 @@ export function editReminder(id: string, updates: Partial<Reminder>): Reminder[]
         newCompletedStatus = updatedReminder.currentDuration >= updatedReminder.targetDuration * 60
       }
       
-      updatedReminder.completed = newCompletedStatus
       updateHistoryForToday(updatedReminder, newCompletedStatus)
       return updatedReminder
     }

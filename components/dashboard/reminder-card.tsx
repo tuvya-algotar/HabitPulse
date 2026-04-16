@@ -3,7 +3,7 @@
 import { Clock, Trash2, Check, Pill, Droplets, Key, ListChecks, Tag, Play, Pause, Plus, Minus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type { Reminder, ReminderCategory, ReminderHistory } from "@/lib/reminders"
-import { CATEGORY_CONFIG, getLocalDateStr } from "@/lib/reminders"
+import { CATEGORY_CONFIG, getLocalDateStr, isCompletedToday } from "@/lib/reminders"
 import { motion, AnimatePresence } from "framer-motion"
 import { EditReminderDialog } from "./edit-reminder-dialog"
 import { useState, useEffect } from "react"
@@ -38,13 +38,25 @@ export function ReminderCard({ reminder, onToggle, onDelete, onEdit, index }: Re
   // Timer logic
   useEffect(() => {
     let interval: NodeJS.Timeout
-    if (isRunning && !reminder.completed) {
+    if (isRunning && !isCompletedToday(reminder)) {
       interval = setInterval(() => {
-        setLocalSeconds((prev) => prev + 1)
+        setLocalSeconds((prev) => {
+          const next = prev + 1
+          const targetSeconds = (reminder.targetDuration ?? 0) * 60
+
+          if (next >= targetSeconds && targetSeconds > 0) {
+            clearInterval(interval)
+            setIsRunning(false)
+            onToggle(reminder.id)
+            return next
+          }
+
+          return next
+        })
       }, 1000)
     }
     return () => clearInterval(interval)
-  }, [isRunning, reminder.completed])
+  }, [isRunning, reminder, onToggle])
 
   useEffect(() => {
     if (!isRunning) {
@@ -137,7 +149,7 @@ export function ReminderCard({ reminder, onToggle, onDelete, onEdit, index }: Re
         ease: [0.16, 1, 0.3, 1],
       }}
       className={`group relative flex flex-col sm:flex-row sm:items-center gap-4 overflow-hidden rounded-xl border p-4 sm:p-5 transition-all duration-500 ${
-        reminder.completed
+        isCompletedToday(reminder)
           ? "border-emerald-500/20 bg-emerald-500/5 shadow-[0_0_25px_rgba(16,185,129,0.05)]"
           : "border-theme-border bg-theme-card hover:border-theme-border-strong hover:bg-theme-card-hover shadow-sm"
       }`}
@@ -151,15 +163,15 @@ export function ReminderCard({ reminder, onToggle, onDelete, onEdit, index }: Re
             whileTap={{ scale: 0.85 }}
             onClick={() => onToggle(reminder.id)}
             className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-all duration-500 ${
-              reminder.completed
+              isCompletedToday(reminder)
                 ? "border-emerald-500/50 bg-emerald-500 text-black shadow-[0_0_15px_rgba(16,185,129,0.3)]"
                 : "border-theme-border hover:border-theme-text hover:bg-theme-card-hover bg-theme-base"
             }`}
-            aria-label={reminder.completed ? "Mark as incomplete" : "Mark as complete"}
+            aria-label={isCompletedToday(reminder) ? "Mark as incomplete" : "Mark as complete"}
           >
             <motion.div
               initial={false}
-              animate={reminder.completed ? { scale: 1, opacity: 1 } : { scale: 0, opacity: 0 }}
+              animate={isCompletedToday(reminder) ? { scale: 1, opacity: 1 } : { scale: 0, opacity: 0 }}
               transition={{ duration: 0.2, type: "spring", stiffness: 300 }}
             >
               <Check className="h-4 w-4" />
@@ -172,7 +184,7 @@ export function ReminderCard({ reminder, onToggle, onDelete, onEdit, index }: Re
             whileTap={{ scale: 0.85 }}
             onClick={() => onToggle(reminder.id)}
             className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-all duration-500 ${
-              reminder.completed
+              isCompletedToday(reminder)
                 ? "border-emerald-500/50 bg-emerald-500 text-black shadow-[0_0_15px_rgba(16,185,129,0.3)]"
                 : "border-theme-border-strong hover:border-theme-text hover:bg-theme-card-hover bg-theme-base text-theme-text-muted hover:text-theme-text"
             }`}
@@ -186,7 +198,7 @@ export function ReminderCard({ reminder, onToggle, onDelete, onEdit, index }: Re
           <div className="flex items-center gap-3">
              <p
                className={`font-semibold truncate transition-all duration-500 ${
-                 reminder.completed
+                 isCompletedToday(reminder)
                    ? "text-emerald-500/70 line-through"
                    : "text-theme-text"
                }`}
@@ -201,7 +213,7 @@ export function ReminderCard({ reminder, onToggle, onDelete, onEdit, index }: Re
                      animate={{ scale: 1, opacity: 1 }}
                      className="text-[10px] font-bold text-orange-400 font-mono tracking-widest bg-orange-500/10 border border-orange-500/20 px-1.5 py-0.5 rounded-md flex items-center gap-1"
                    >
-                     🔥 {streak} DAY{streak !== 1 ? 'S' : ''} {reminder.completed ? <span className="text-[9px] opacity-70 ml-0.5">GROWING</span> : ''}
+                     🔥 {streak} DAY{streak !== 1 ? 'S' : ''} {isCompletedToday(reminder) ? <span className="text-[9px] opacity-70 ml-0.5">GROWING</span> : ''}
                    </motion.span>
                ) : (
                    <motion.span 
@@ -222,7 +234,7 @@ export function ReminderCard({ reminder, onToggle, onDelete, onEdit, index }: Re
                </span>
                <span
                  className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[10px] uppercase tracking-wider font-bold text-theme-text-muted bg-theme-card-hover border border-theme-border ${
-                   reminder.completed ? 'opacity-50' : ''
+                   isCompletedToday(reminder) ? 'opacity-50' : ''
                  }`}
                >
                  <Icon className="h-3 w-3" />
@@ -248,7 +260,7 @@ export function ReminderCard({ reminder, onToggle, onDelete, onEdit, index }: Re
 
       {/* Habit Specific Actions */}
       <div className="flex items-center justify-between sm:justify-end gap-3 mt-2 sm:mt-0 opacity-100 transition-opacity">
-        {isCount && !reminder.completed && (
+        {isCount && !isCompletedToday(reminder) && (
           <div className="flex items-center gap-3 bg-theme-card-hover border border-theme-border rounded-xl px-2 py-1">
             <button
               onClick={handleDecrement}
@@ -269,14 +281,14 @@ export function ReminderCard({ reminder, onToggle, onDelete, onEdit, index }: Re
           </div>
         )}
 
-        {isCount && reminder.completed && (
+        {isCount && isCompletedToday(reminder) && (
            <div className="flex items-center gap-2 bg-theme-card-hover border border-theme-border rounded-xl px-4 py-2">
             <span className="text-theme-text font-bold text-sm">Target reached</span>
             <span className="text-theme-text-muted font-bold text-sm">({reminder.currentValue || 0} / {reminder.targetValue})</span>
            </div>
         )}
 
-        {isTimer && !reminder.completed && (
+        {isTimer && !isCompletedToday(reminder) && (
           <div className="flex items-center gap-3 bg-theme-card-hover border border-theme-border rounded-xl px-2 py-1">
             <div className="flex flex-col items-center min-w-[3.5rem] px-2">
               <span className="text-theme-text font-mono font-bold text-sm leading-none">{formatTime(localSeconds)}</span>
@@ -296,7 +308,7 @@ export function ReminderCard({ reminder, onToggle, onDelete, onEdit, index }: Re
           </div>
         )}
 
-        {isTimer && reminder.completed && (
+        {isTimer && isCompletedToday(reminder) && (
            <div className="flex items-center gap-2 bg-theme-card-hover border border-theme-border rounded-xl px-4 py-2">
             <span className="text-theme-text font-bold text-sm">Timer complete</span>
             <span className="text-theme-text-muted font-bold text-sm font-mono">({formatTime(localSeconds)})</span>
